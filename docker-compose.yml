@@ -1,21 +1,27 @@
 services:
-  postgres:
+  db:
     image: postgres:17
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
-      - POSTGRES_DB=goal_db
-      - POSTGRES_USER=goal_user
-      - POSTGRES_PASSWORD=goal_password
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
 
   backend:
-    build: ./back
+    build: ./backend
     ports:
-      - "8000:8000"
+      - "5001:5001"
     environment:
-      - DATABASE_URL=postgresql://goal_user:goal_password@postgres/goal_db
+      - DB_HOST=db
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_PORT=5432
     depends_on:
-      - postgres
+      - db
 
 volumes:
   postgres_data:

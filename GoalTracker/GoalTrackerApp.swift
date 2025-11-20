@@ -5,8 +5,8 @@
 //  Created by Adilet Beishekeyev on 20.11.2025.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct GoalTrackerApp: App {
@@ -14,6 +14,7 @@ struct GoalTrackerApp: App {
         WindowGroup {
             GoalListView()
         }
-        .modelContainer(for: Goal.self)
+        .modelContainer(
+            for: Goal.self, configurations: ModelConfiguration(mergePolicy: .mergeByProperty))
     }
 }
