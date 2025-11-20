@@ -12,13 +12,15 @@ struct GoalListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Goal.creationDate, order: .reverse) private var goals: [Goal]
     
+    @State private var selectedGoal: Goal?
     @State private var isShowingNewGoalSheet = false
     
     var body: some View {
         NavigationSplitView {
-            List {
+            List(selection: $selectedGoal) {
                 ForEach(goals) { goal in
-                    GoalRowView(goal: goal)
+                    GoalRowContent(goal: goal)
+                        .tag(goal)
                 }
                 .onDelete(perform: deleteGoals)
             }
@@ -32,9 +34,13 @@ struct GoalListView: View {
                 }
             }
         } detail: {
-            Text("Select a goal to view its details, or add a new one.")
-                .font(.title3)
-                .foregroundColor(.secondary)
+            if let goal = selectedGoal {
+                GoalDetailView(goal: goal)
+            } else {
+                Text("Select a goal to view its details, or add a new one.")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+            }
         }
         .sheet(isPresented: $isShowingNewGoalSheet) {
             NewGoalView()
@@ -55,9 +61,7 @@ struct GoalListView: View {
         }
     }
 }
-
-
-struct GoalRowView: View {
+struct GoalRowContent: View {
     @Bindable var goal: Goal
     
     var body: some View {
@@ -79,15 +83,9 @@ struct GoalRowView: View {
                 .frame(width: 120)
                 .scaleEffect(x: 1, y: 1.5, anchor: .center)
             
-
             if !goal.isComplete {
                 Button {
-                    goal.currentValue = min(
-                        goal.currentValue + 1,
-                        goal.targetValue
-                    )
-                                
-                                
+                    goal.currentValue = min(goal.currentValue + 1, goal.targetValue)
                     if goal.currentValue >= goal.targetValue {
                         goal.isComplete = true
                     }
@@ -127,11 +125,7 @@ struct NewGoalView: View {
                 TextField("Goal Name (e.g., Pages to read)", text: $name)
                     .textFieldStyle(.roundedBorder)
                 
-                Stepper(
-                    "Target Value: \(targetValue)",
-                    value: $targetValue,
-                    in: 1...9999
-                )
+                Stepper("Target Value: \(targetValue)", value: $targetValue, in: 1...9999)
             }
             .padding()
             
@@ -140,9 +134,7 @@ struct NewGoalView: View {
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.defaultAction)
-            .disabled(
-                name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            )
+            .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(40)
         .frame(minWidth: 400, idealWidth: 450, idealHeight: 300)
