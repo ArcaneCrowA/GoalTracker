@@ -1,103 +1,112 @@
-docker compose up -d
-This command downloads the latest PostgreSQL image, creates the `db` service, exposes port 5432, and starts the database container.
+# GoalTracker
 
-### Step 2: Implement a Data Synchronization Strategy
+GoalTracker is a cross-platform (macOS/iOS) application built with SwiftUI and SwiftData, designed to help users track their goals. It features a Python Flask backend that communicates with a PostgreSQL database, enabling bi-directional data synchronization between the client and the central database.
 
-True **synchronization** (sync) means handling changes that happen both in your application (local) and directly in the database (remote). The best way to implement this is using a design pattern often called **Change Data Capture (CDC)** or **Polling**. 
+## Architecture Overview
 
-[Image of Change Data Capture architecture]
+The project follows a client-server architecture:
 
+1.  **Client (SwiftUI/SwiftData):** A macOS (and potentially iOS) application built with SwiftUI for the UI and SwiftData for local data persistence. It interacts with the backend service to synchronize data.
+2.  **Backend Service (Python/Flask):** A lightweight Flask application that acts as an intermediary between the client and the PostgreSQL database. It handles API requests for data synchronization (create, read, update, delete goals).
+3.  **Database (PostgreSQL):** The central source of truth for all goal data, managed via Docker.
 
-Since you are using SwiftUI/SwiftData for the client, and assuming a backend service will handle the synchronization logic, here is the architectural approach for the backend service:
+## Features
 
-#### A. Architecture Overview
+*   **Goal Management:** Create, view, update, and delete goals.
+*   **Progress Tracking:** Increment goal progress and mark goals as complete.
+*   **Bi-directional Synchronization:**
+    *   **Local to Remote (Push):** Changes made in the SwiftData client (new goals, updates, deletions) are pushed to the PostgreSQL database via the Flask backend.
+    *   **Remote to Local (Pull):** The client periodically fetches changes from the PostgreSQL database (based on `updated_at` timestamps) and merges them into its local SwiftData store.
+*   **Dockerized Database:** Easy setup and management of the PostgreSQL database using Docker Compose.
 
-1.  **Client (SwiftData):** Your application uses SwiftData for its local data model.
-2.  **Backend Service (e.g., in Python/Node.js/Go):** This service acts as the intermediary between the client and PostgreSQL. It manages the two-way sync.
-3.  **Database (PostgreSQL):** The source of truth.
+## Setup Instructions
 
-#### B. Implementation for Synchronization (Conceptual Logic)
+Follow these steps to get the GoalTracker project running on your local machine.
 
-Synchronization requires tracking two types of changes:
+### Step 1: Set up the PostgreSQL Database with Docker Compose
 
-| Type of Sync | Description | PostgreSQL Mechanism |
-| :--- | :--- | :--- |
-| **Local to Remote (Push Changes)** | Your app modified/created a goal (e.g., `currentValue` increased), and needs to update PostgreSQL. | Standard SQL `INSERT`, `UPDATE`, or `DELETE` commands sent from the backend service based on client requests (e.g., REST API calls). |
-| **Remote to Local (Pull Changes)** | Data was changed directly in PostgreSQL (e.g., an admin edited a goal) and needs to be pulled by your app. | **Timestamps (`updated_at`):** Query the database for records where `updated_at` is newer than the client's last sync time. |
+Ensure you have Docker and Docker Compose installed on your system.
 
----
-
-### Step 3: Detailed Logic for Remote-to-Local Sync (Pull)
-
-To efficiently get new data from PostgreSQL, you must rely on a timestamp column.
-
-1.  **Database Setup (SQL):** Add an `updated_at` column to your PostgreSQL table and set up a trigger to automatically update it on every change.
-
-    ```sql
-    CREATE TABLE goals (
-        id UUID PRIMARY KEY,
-        name TEXT NOT NULL,
-        target_value INTEGER NOT NULL,
-        current_value INTEGER NOT NULL,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    );
-
-    -- Trigger function to update the updated_at column on change
-    CREATE OR REPLACE FUNCTION set_updated_at()
-    RETURNS TRIGGER AS $$
-    BEGIN
-        NEW.updated_at = NOW();
-        RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
-
-    -- Attach the trigger to the table
-    CREATE TRIGGER update_goal_updated_at
-    BEFORE UPDATE ON goals
-    FOR EACH ROW
-    EXECUTE PROCEDURE set_updated_at();
+1.  **Start the database and backend containers:**
+    Navigate to the root directory of the project in your terminal and run:
+    ```bash
+    docker compose up -d
+    ```
+    This command downloads the latest PostgreSQL image, creates the `db` service, exposes port 5432, and starts the database container in detached mode.
     
-2.  **Backend Service Logic:**
+    The backend will start and attempt to connect to the `db` service (PostgreSQL). It will also automatically create the `goals` table and its `updated_at` trigger if they don't exist, with a retry mechanism to account for database startup time. You should see messages indicating that the server is running on `http://0.0.0.0:5001`.
 
-    * The client sends its `last_sync_timestamp` to the backend.
-    * The backend runs a query like:
-        ```sql
-        SELECT * FROM goals WHERE updated_at > :last_sync_timestamp ORDER BY updated_at;
-            * The backend sends the retrieved list of goals back to the client.
 
-3.  **Client (SwiftData) Logic:**
+### Step 2: Configure and Run the SwiftData macOS Client
 
-    * Your SwiftData application stores the last successful sync time in `UserDefaults` or a small persistent model.
-    * When the app receives the new data from the backend, it iterates through the incoming records:
-        * If the record exists locally (match by `id`), update the local `Goal` object's properties.
-        * If the record is new, insert a new local `Goal` object.
-    * After applying all changes, save the *current* server timestamp as the new `last_sync_timestamp`.
+The macOS application needs to be configured for network access and might require a cleanup of old data if you're upgrading.
 
-### Step 4: Integrating with SwiftUI (Conceptual Client-Side)
 
-In your `GoalListView.swift`, you would introduce a sync method triggered manually or periodically. Since the current SwiftData implementation is purely local, you would replace the local save logic with calls to your imaginary backend service.
+1.  **Enable Network Access (App Sandbox):**
+    *   In Xcode, select the **GoalTracker project** in the Project Navigator.
+    *   Select the **"GoalTracker" target**.
+    *   Go to the **"Signing & Capabilities"** tab.
+    *   Click **"+ Capability"** and add **"App Sandbox"**.
+    *   Under the "Network" section within "App Sandbox," ensure **"Outgoing Connections (Client)"** is checked. This allows your app to connect to the local backend server.
 
-```swift
-// Example concept for a sync function in SwiftUI/SwiftData
-private func syncData() {
-    Task {
-        let lastSync = UserDefaults.standard.object(forKey: "lastSyncTime") as? Date ?? Date.distantPast
-        
-        do {
-            // 1. PUSH: Send local changes (requires tracking local pending changes, omitted for simplicity)
-            // 2. PULL: Fetch remote changes since last sync time
-            let remoteGoals = try await backendService.fetchGoals(since: lastSync) 
-            
-            // 3. APPLY: Merge remote changes into local SwiftData store
-            await MainActor.run {
-                applyRemoteChanges(remoteGoals)
-                UserDefaults.standard.set(Date(), forKey: "lastSyncTime")
-            }
-            
-        } catch {
-            print("Sync failed: \(error)")
-        }
-    }
-}
+2.  **Run the application:**
+    Build and run the GoalTracker app from Xcode.
 
-By using Docker to host PostgreSQL and implementing a timestamp-based synchronization layer on a backend service, you achieve reliable, bi-directional data flow between your local app and the source of truth database.
+## Data Synchronization Logic
+
+The application implements a timestamp-based, bi-directional synchronization strategy:
+
+### Client-Side (SwiftData)
+
+*   **Local Data Model:** The client uses SwiftData for its local `Goal` objects. Each `Goal` has an `id` (UUID), `name`, `targetValue`, `currentValue`, `creationDate`, `isComplete`, and crucially, an `updatedAt` timestamp.
+*   **`updatedAt` Tracking:** The `updatedAt` property of a `Goal` automatically updates whenever `name`, `targetValue`, `currentValue`, or `isComplete` changes via `didSet` observers.
+*   **Push Changes (Local to Remote):**
+    *   **Create:** When a new `Goal` is saved locally, the `NewGoalView` triggers an asynchronous call to `BackendService.shared.createGoal()`.
+    *   **Update:** When a `Goal`'s progress is incremented (`GoalRowContent`, `GoalDetailView`) or edited (`EditGoalView`), an asynchronous call to `BackendService.shared.updateGoal()` is made.
+    *   **Delete:** When a `Goal` is deleted locally, the `GoalListView` or `GoalDetailView` triggers an asynchronous call to `BackendService.shared.deleteGoal()`.
+*   **Pull Changes (Remote to Local):**
+    *   The `GoalListView` initiates a `syncData()` call `onAppear` and via a manual "Sync" button.
+    *   It sends its `lastSyncTime` (stored in `UserDefaults`) to the backend.
+    *   The `BackendService` fetches `GoalResponse` objects from the `/sync` endpoint that have an `updated_at` greater than `lastSyncTime`.
+    *   The client's `applyRemoteChanges()` function iterates through these `remoteGoals`:
+        *   If a remote goal `id` matches a local goal and the remote `updated_at` is newer, the local goal is updated.
+        *   If no local goal matches the remote goal `id`, a new local `Goal` object is inserted.
+    *   After applying all changes, the `lastSyncTime` in `UserDefaults` is updated to the server's timestamp received during the sync.
+
+### Backend-Side (Python Flask)
+
+*   **Database Schema Initialization:** On startup, `app.py`'s `_init_db()` function creates the `goals` table (if it doesn't exist) and an `updated_at` trigger that automatically updates the `updated_at` timestamp on any row modification.
+*   **`/sync` (GET) Endpoint:**
+    *   Receives `last_sync_timestamp` from the client.
+    *   Queries the `goals` table for all records where `updated_at` is greater than the provided timestamp, ordered by `updated_at`.
+    *   Returns a JSON list of `GoalResponse` objects and the current `server_timestamp`.
+*   **`/goals` (POST) Endpoint:**
+    *   Receives a JSON `GoalRequest` from the client.
+    *   Inserts a new goal into the `goals` table. Handles `ValueError` for `Z` in ISO timestamps by converting `Z` to `+00:00`.
+*   **`/goals/<uuid:goal_id>` (PUT) Endpoint:**
+    *   Receives a JSON `GoalRequest` for updating an existing goal.
+    *   Updates the specified goal in the `goals` table. Handles `ValueError` for `Z` in ISO timestamps.
+*   **`/goals/<uuid:goal_id>` (DELETE) Endpoint:**
+    *   Receives a goal `id`.
+    *   Deletes the corresponding goal from the `goals` table.
+
+## Troubleshooting
+
+*   **"A server with the specified hostname could not be found." (Error Code: -1003)**
+    *   Ensure your Python Flask backend is running (`python app.py` in the `backend` directory).
+    *   Verify the `baseURL` in `BackendService.swift` matches the Flask server's address (`http://localhost:5001`).
+
+*   **"Operation not permitted" (Error Code: 1) / Sandbox errors for networking**
+    *   For macOS apps, ensure **"App Sandbox"** is enabled in `Signing & Capabilities` in Xcode, and **"Outgoing Connections (Client)"** is checked under the "Network" section.
+
+*   **`ValueError: Invalid isoformat string: 'YYYY-MM-DDTHH:MM:SSZ'` in backend logs**
+    *   This was addressed by adding `Z` to `+00:00` conversion in `app.py`'s `create_goal` and `update_goal` functions. Ensure your backend Docker image is rebuilt (`docker compose up --build -d`) after this change.
+
+*   **`ERROR: relation "goals" does not exist` in `db-1` logs**
+    *   Ensure the `_init_db()` function in `app.py` is called and has successfully created the tables.
+    *   Ensure your backend Docker image is rebuilt (`docker compose up --build -d`) after the retry logic was added to `_init_db()`.
+    *   Sometimes, manually connecting to the PostgreSQL container and verifying `\dt` can help: `docker exec -it <db-container-id> psql -U postgres`.
+
+*   **`DELETE /goals/{uuid}` returns `404`**
+    *   The goal ID sent by the client might not exist in the database. Verify successful creation first.
+    *   Check backend logs for detailed messages from the `delete_goal` function to see the ID received and rows affected.
