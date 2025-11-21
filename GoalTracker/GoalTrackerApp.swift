@@ -14,7 +14,6 @@ struct GoalTrackerApp: App {
         WindowGroup {
             GoalListView()
         }
-        .modelContainer(
-            for: Goal.self, ModelConfiguration(mergePolicy: .mergeByProperty))
+        .modelContainer(for: Goal.self)
     }
 }
