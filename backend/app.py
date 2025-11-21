@@ -1,5 +1,6 @@
 import os
 import time
+import traceback  # Added for enhanced error logging
 from datetime import datetime, timezone
 
 import psycopg2
@@ -207,6 +208,7 @@ def create_goal():
     except Exception as e:
         conn.rollback()
         print(f"An error occurred during goal creation: {e}")
+        traceback.print_exc()  # Print full traceback for debugging
         return jsonify({"error": "An internal error occurred"}), 500
     finally:
         if cursor:
