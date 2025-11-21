@@ -66,7 +66,16 @@ struct GoalListView: View {
     private func deleteGoals(offsets: IndexSet) {
         withAnimation {
             for index in offsets {
-                modelContext.delete(goals[index])
+                let goalToDelete = goals[index]
+                modelContext.delete(goalToDelete)
+                Task {
+                    do {
+                        try await BackendService.shared.deleteGoal(id: goalToDelete.id)
+                        print("Successfully pushed delete for goal ID: \(goalToDelete.id)")
+                    } catch {
+                        print("Error pushing delete for goal ID \(goalToDelete.id): \(error.localizedDescription)")
+                    }
+                }
             }
             do {
                 try modelContext.save()
@@ -83,7 +92,7 @@ struct GoalListView: View {
             print("Fetched \(remoteGoals.count) remote goals.")
 
             await MainActor.run {
-                applyRemoteChanges(remoteGoals as! [GoalResponse])
+                applyRemoteChanges(remoteGoals)
                 lastSyncTime = Date()
             }
             print("Sync completed successfully. Last sync time: \(lastSyncTime)")
@@ -220,9 +229,22 @@ struct NewGoalView: View {
 
         do {
             try modelContext.save()
+            // Push to backend after local save
+            Task {
+                await pushCreate(goal: newGoal)
+            }
             dismiss()
         } catch {
             print("Error saving goal: \(error.localizedDescription)")
+        }
+    }
+
+    private func pushCreate(goal: Goal) async {
+        do {
+            try await BackendService.shared.createGoal(goal: goal)
+            print("Successfully pushed new goal: \(goal.name)")
+        } catch {
+            print("Error pushing new goal \(goal.name): \(error.localizedDescription)")
         }
     }
 }

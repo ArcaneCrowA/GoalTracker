@@ -65,12 +65,10 @@ struct GoalDetailView: View {
             if !goal.isComplete {
                 Button {
                     goal.currentValue = min(goal.currentValue + 1, goal.targetValue)
-
-                    if goal.currentValue >= goal.targetValue {
-                        goal.isComplete = true
+                    // The didSet observer in Goal.swift will set updatedAt
+                    Task {
+                        await pushUpdate(goal: goal)
                     }
-                    goal.updatedAt = Date()  // Mark as updated
-                    goal.updatedAt = Date()  // Mark as updated
                 } label: {
                     Text("Increment Progress (+1)")
                         .frame(maxWidth: .infinity)
@@ -89,34 +87,61 @@ struct GoalDetailView: View {
             }
         }
         .sheet(isPresented: $isEditing) {
-            EditGoalView(goal: goal)
+            EditGoalView(goal: goal) {
+                // This closure is called when EditGoalView saves
+                Task {
+                    await pushUpdate(goal: goal)
+                }
+            }
         }
 
     }
     private func deleteGoal() {
         withAnimation {
+            let goalID = goal.id // Capture ID before deletion
             modelContext.delete(goal)
 
             do {
                 try modelContext.save()
+                Task {
+                    await pushDelete(goalID: goalID)
+                }
             } catch {
                 print("Error deleting goal from detail view: \(error.localizedDescription)")
             }
         }
     }
 
+    private func pushDelete(goalID: UUID) async {
+        do {
+            try await BackendService.shared.deleteGoal(id: goalID)
+            print("Successfully pushed delete for goal ID: \(goalID)")
+        } catch {
+            print("Error pushing delete for goal ID \(goalID): \(error.localizedDescription)")
+        }
+    }
+
+    private func pushUpdate(goal: Goal) async {
+        do {
+            try await BackendService.shared.updateGoal(goal: goal)
+            print("Successfully pushed update for goal: \(goal.name)")
+        } catch {
+            print("Error pushing update for goal \(goal.name): \(error.localizedDescription)")
+        }
+    }
 }
 
 struct EditGoalView: View {
     @Environment(\.dismiss) var dismiss
     @Bindable var goal: Goal
+    var onUpdate: () -> Void // Closure to be called after update
 
     @State private var name: String
     @State private var targetValue: Int
 
-    init(goal: Goal) {
-
+    init(goal: Goal, onUpdate: @escaping () -> Void) {
         self.goal = goal
+        self.onUpdate = onUpdate
         _name = State(initialValue: goal.name)
         _targetValue = State(initialValue: goal.targetValue)
     }
@@ -146,9 +171,9 @@ struct EditGoalView: View {
                 }
 
                 goal.currentValue = min(goal.currentValue, targetValue)
+                // The didSet observer in Goal.swift will set updatedAt
 
-                goal.updatedAt = Date()  // Mark as updated
-
+                onUpdate() // Call the closure to trigger sync/push in parent view
                 dismiss()
             }
             .buttonStyle(.borderedProminent)

@@ -11,11 +11,11 @@ import SwiftData
 @Model
 final class Goal: Identifiable {
     @Attribute(.unique) var id: UUID
-    var name: String
-    var targetValue: Int
-    var currentValue: Int
+    var name: String { didSet { updatedAt = Date() } }
+    var targetValue: Int { didSet { updatedAt = Date() } }
+    var currentValue: Int { didSet { updatedAt = Date() } }
     var creationDate: Date
-    var isComplete: Bool
+    var isComplete: Bool { didSet { updatedAt = Date() } }
     var updatedAt: Date
 
     init(

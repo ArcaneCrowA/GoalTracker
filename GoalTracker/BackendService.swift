@@ -37,7 +37,7 @@ class BackendService {
 
     private init() {}
 
-    func fetchGoals(since lastSyncTimestamp: Date) async throws -> [Goal] {
+    func fetchGoals(since lastSyncTimestamp: Date) async throws -> [GoalResponse] {
         guard
             var urlComponents = URLComponents(
                 url: baseURL.appendingPathComponent("sync"), resolvingAgainstBaseURL: true)
@@ -84,6 +84,95 @@ class BackendService {
             throw NetworkError.decodingError(error)
         }
     }
+    func createGoal(goal: Goal) async throws {
+        print("Sending create request for goal: \(goal.name)")
+        try await sendGoalRequest(goal: goal, method: "POST", path: "goals")
+    }
+
+    func updateGoal(goal: Goal) async throws {
+        print("Sending update request for goal: \(goal.name)")
+        try await sendGoalRequest(goal: goal, method: "PUT", path: "goals/\(goal.id.uuidString)")
+    }
+
+    func deleteGoal(id: UUID) async throws {
+        print("Sending delete request for goal ID: \(id.uuidString)")
+        try await sendRequest(method: "DELETE", path: "goals/\(id.uuidString)")
+    }
+
+    private func sendGoalRequest(goal: Goal, method: String, path: String) async throws {
+        guard let url = baseURL.appendingPathComponent(path) else {
+            throw NetworkError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        let goalRequest = GoalRequest(
+            id: goal.id,
+            name: goal.name,
+            target_value: goal.targetValue,
+            current_value: goal.currentValue,
+            updated_at: goal.updatedAt
+        )
+
+        do {
+            request.httpBody = try encoder.encode(goalRequest)
+        } catch {
+            print("Encoding error for goal request: \(error)")
+            throw NetworkError.decodingError(error)
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.noData
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorResponse =
+                try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+            let errorMessage = errorResponse?["error"] as? String
+            print("Server error for \(method) \(path): \(httpResponse.statusCode) - \(errorMessage ?? "No message")")
+            throw NetworkError.serverError(statusCode: httpResponse.statusCode, message: errorMessage)
+        }
+        print("Successfully sent \(method) request to \(path)")
+    }
+
+    private func sendRequest(method: String, path: String) async throws {
+        guard let url = baseURL.appendingPathComponent(path) else {
+            throw NetworkError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.noData
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorResponse =
+                try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+            let errorMessage = errorResponse?["error"] as? String
+            print("Server error for \(method) \(path): \(httpResponse.statusCode) - \(errorMessage ?? "No message")")
+            throw NetworkError.serverError(statusCode: httpResponse.statusCode, message: errorMessage)
+        }
+        print("Successfully sent \(method) request to \(path)")
+    }
+}
+
+struct GoalRequest: Encodable {
+    let id: UUID
+    let name: String
+    let target_value: Int
+    let current_value: Int
+    let updated_at: Date
 }
 
 struct SyncResponse: Decodable {
