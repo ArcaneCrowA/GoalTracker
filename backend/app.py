@@ -192,7 +192,12 @@ def create_goal():
                 data["name"],
                 data["target_value"],
                 data["current_value"],
-                datetime.fromisoformat(data["updated_at"]),
+                # Handle 'Z' suffix for UTC timestamps
+                (
+                    datetime.fromisoformat(data["updated_at"][:-1] + "+00:00")
+                    if data["updated_at"].upper().endswith("Z")
+                    else datetime.fromisoformat(data["updated_at"])
+                ),
             ),
         )
         conn.commit()
@@ -236,7 +241,12 @@ def update_goal(goal_id):
         if field in data:
             update_fields.append(f"{field} = %s")
             if field == "updated_at":
-                update_values.append(datetime.fromisoformat(data[field]))
+                # Handle 'Z' suffix for UTC timestamps
+                update_values.append(
+                    datetime.fromisoformat(data[field][:-1] + "+00:00")
+                    if data[field].upper().endswith("Z")
+                    else datetime.fromisoformat(data[field])
+                )
             else:
                 update_values.append(data[field])
 
