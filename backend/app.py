@@ -288,9 +288,13 @@ def delete_goal(goal_id):
 
     cursor = conn.cursor()
     try:
+        print(f"Attempting to delete goal with ID: {goal_id}")
         query = "DELETE FROM goals WHERE id = %s;"
         cursor.execute(query, (str(goal_id),))
         conn.commit()
+        print(
+            f"DELETE query executed for ID: {goal_id}. Rows affected: {cursor.rowcount}"
+        )
 
         if cursor.rowcount == 0:
             return jsonify({"error": "Goal not found"}), 404
