@@ -100,9 +100,7 @@ class BackendService {
     }
 
     private func sendGoalRequest(goal: Goal, method: String, path: String) async throws {
-        guard let url = baseURL.appendingPathComponent(path) else {
-            throw NetworkError.invalidURL
-        }
+        let url = baseURL.appendingPathComponent(path)
 
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -143,9 +141,7 @@ class BackendService {
     }
 
     private func sendRequest(method: String, path: String) async throws {
-        guard let url = baseURL.appendingPathComponent(path) else {
-            throw NetworkError.invalidURL
-        }
+        let url = baseURL.appendingPathComponent(path)
 
         var request = URLRequest(url: url)
         request.httpMethod = method
