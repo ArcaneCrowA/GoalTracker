@@ -45,7 +45,7 @@ struct GoalListView: View {
                     await syncData()
                 }
             }
-        } detail {
+        } detail: {
             if let goal = selectedGoal {
                 GoalDetailView(goal: goal)
             } else {

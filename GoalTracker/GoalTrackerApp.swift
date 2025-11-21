@@ -15,6 +15,6 @@ struct GoalTrackerApp: App {
             GoalListView()
         }
         .modelContainer(
-            for: Goal.self, configurations: ModelConfiguration(mergePolicy: .mergeByProperty))
+            for: Goal.self, ModelConfiguration(mergePolicy: .mergeByProperty))
     }
 }
