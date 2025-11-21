@@ -5,9 +5,6 @@ from datetime import datetime, timezone
 import psycopg2
 from flask import Flask, jsonify, request
 
-app = Flask(__name__)
-_init_db()  # Initialize database schema on startup
-
 DB_HOST = os.environ.get("DB_HOST", "db")
 DB_NAME = os.environ.get("DB_NAME", "postgres")
 DB_USER = os.environ.get("DB_USER", "postgres")
@@ -100,6 +97,10 @@ def _init_db(max_retries=5, delay_seconds=5):
             cursor.close()
         if conn:
             conn.close()
+
+
+app = Flask(__name__)
+_init_db()  # Initialize database schema on startup
 
 
 @app.route("/")
