@@ -33,7 +33,7 @@ enum NetworkError: Error, LocalizedError {
 class BackendService {
     static let shared = BackendService()
 
-    private let baseURL = URL(string: "http://localhost:5001")!
+    private let baseURL = URL(string: "http://127.0.0.1:5001")!
 
     private init() {}
 
