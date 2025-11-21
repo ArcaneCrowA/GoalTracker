@@ -1,10 +1,12 @@
 import os
+import time
 from datetime import datetime, timezone
 
 import psycopg2
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
+_init_db()  # Initialize database schema on startup
 
 DB_HOST = os.environ.get("DB_HOST", "db")
 DB_NAME = os.environ.get("DB_NAME", "postgres")
@@ -29,11 +31,22 @@ def get_db_connection():
         return None
 
 
-def _init_db():
-    """Initializes the database schema if it doesn't exist."""
-    conn = get_db_connection()
-    if conn is None:
-        print("Database connection failed during initialization.")
+def _init_db(max_retries=5, delay_seconds=5):
+    """Initializes the database schema if it doesn't exist, with retries."""
+    conn = None
+    for i in range(max_retries):
+        conn = get_db_connection()
+        if conn:
+            print(f"Database connection successful after {i + 1} attempt(s).")
+            break
+        print(
+            f"Attempt {i + 1}/{max_retries}: Database connection failed during initialization. Retrying in {delay_seconds} seconds..."
+        )
+        time.sleep(delay_seconds)
+    else:  # This else belongs to the for loop, executes if loop completes without break
+        print(
+            "Failed to connect to database after multiple retries. Exiting initialization."
+        )
         return
 
     cursor = conn.cursor()
@@ -282,5 +295,4 @@ def delete_goal(goal_id):
 
 
 if __name__ == "__main__":
-    _init_db()  # Initialize database schema on startup
     app.run(host="0.0.0.0", port=5001, debug=True)
